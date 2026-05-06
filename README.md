@@ -285,6 +285,6 @@ elite-cs-swe-curriculum-roadmap/
 - **Week:** 1 of 6
 - **Progress:** See [PROGRESS.md](./PROGRESS.md)
 
----
+--- 
 
 *Built with Claude · بُني بمساعدة كلود*

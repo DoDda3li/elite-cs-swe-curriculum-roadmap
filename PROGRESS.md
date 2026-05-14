@@ -1,1 +1,102 @@
+[PROGRESS.md](https://github.com/user-attachments/files/27779076/PROGRESS.md)
 <img width="912" height="1072" alt="image" src="https://github.com/user-attachments/assets/23292f05-20de-4f4d-9c16-d795223584a0" />
+# P0: Computing Foundations
+**Dates:** May 3 – Jun 13, 2026
+**Last updated:** 15 May 2026
+**Progress:** 13/134 tasks (10%)
+
+## Weekly Progress
+- [ ] **Week 1** — How computers work (13/23 tasks)
+- [ ] **Week 2** — The internet - how data travels (0/18 tasks)
+- [ ] **Week 3** — Linux command line and terminal (0/17 tasks)
+- [ ] **Week 4** — Version control Git and GitHub (0/18 tasks)
+- [ ] **Week 5** — Editors debugging and regex (0/19 tasks)
+- [ ] **Week 6** — Math readiness and P0 capstone (0/16 tasks)
+- [ ] **Week 7** — Bilingual Consolidation Week (0/14 tasks)
+- [ ] **Week 8** — Mandatory Rest Week (0/9 tasks)
+
+## Exam Grades
+| Date | Scope | Type | Score | Grade |
+|------|-------|------|-------|-------|
+| 5/4/2026 | Day exam Sun May 3 Binary numbers and how | daily | 91% | A+ |
+| 5/4/2026 | Day exam Mon May 4 Boolean logic - AND OR | daily | 92% | A+ |
+| 5/14/2026 | Day exam Wed May 6 CS50 PS0 completion and ASCII practice | daily | 92% | A+ |
+
+**Weighted Phase Score:** 1% (F)
+
+## Daily Task Completion
+
+### Week 1: How computers work
+**Sun May 3** (Binary numbers and how computers store data): 5/5 tasks
+**Mon May 4** (Boolean logic - AND OR NOT gates): 4/4 tasks
+**Tue May 5** (CPU architecture and memory hierarchy): 2/5 tasks
+**Wed May 6** (CS50 PS0 completion and ASCII practice): 2/2 tasks
+**Thu May 7** (Storage, file systems and OS overview): 0/3 tasks
+**Fri May 8** (Week 1 review and Anki consolidation): 0/2 tasks
+**Sat May 9** (Weekly Exam 1 - How Computers Work): 0/2 tasks
+
+### Week 2: The internet - how data travels
+**Sun May 10** (IP addresses, DNS, and packets): 0/3 tasks
+**Mon May 11** (HTTP, HTTPS, and how browsers work): 0/3 tasks
+**Tue May 12** (DNS resolution, TCP handshake, DevTools): 0/4 tasks
+**Wed May 13** (Practical tools curl ping traceroute): 0/2 tasks
+**Thu May 14** (Protocol review and consolidation): 0/2 tasks
+**Fri May 15** (Security basics HTTPS overview): 0/2 tasks
+**Sat May 16** (Weekly Exam 2 - The Internet): 0/2 tasks
+
+### Week 3: Linux command line and terminal
+**Sun May 17** (First day in the terminal): 0/3 tasks
+**Mon May 18** (MIT Missing Semester Lecture 1 video and exercises): 0/2 tasks
+**Tue May 19** (Pipes grep find and shell scripting): 0/4 tasks
+**Wed May 20** (Vim editor basics): 0/2 tasks
+**Thu May 21** (File permissions processes environment variables): 0/2 tasks
+**Fri May 22** (Regex fundamentals): 0/2 tasks
+**Sat May 23** (P0 Midterm Exam - Weeks 1-3 cumulative): 0/2 tasks
+
+### Week 4: Version control Git and GitHub
+**Sun May 24** (Git fundamentals init add commit log): 0/3 tasks
+**Mon May 25** (Git basics status diff checkout): 0/2 tasks
+**Tue May 26** (Branching merging and GitHub setup): 0/3 tasks
+**Wed May 27** (MIT Missing Semester Lecture 6 and conflict resolution): 0/2 tasks
+**Thu May 28** (gitignore GitHub workflow pull requests): 0/3 tasks
+**Fri May 29** (Git internals blobs trees commits): 0/3 tasks
+**Sat May 30** (Weekly Exam 4 - Git and Version Control): 0/2 tasks
+
+### Week 5: Editors debugging and regex
+**Sun May 31** (VS Code mastery shortcuts and extensions): 0/3 tasks
+**Mon Jun 1** (Python installation and debugging): 0/3 tasks
+**Tue Jun 2** (MIT Missing Semester Lecture 4 Data Wrangling): 0/4 tasks
+**Wed Jun 3** (MIT Missing Semester Lecture 5 tmux dotfiles SSH): 0/2 tasks
+**Thu Jun 4** (SSH keys and remote connections): 0/3 tasks
+**Fri Jun 5** (Week 5 consolidation): 0/2 tasks
+**Sat Jun 6** (Weekly Exam 5 - Tools and Debugging): 0/2 tasks
+
+### Week 6: Math readiness and P0 capstone
+**Sun Jun 7** (Algebra and functions Khan Academy): 0/2 tasks
+**Mon Jun 8** (Set theory basics and P1 preview): 0/3 tasks
+**Tue Jun 9** (P0 capstone portfolio GitHub repo): 0/2 tasks
+**Wed Jun 10** (Full P0 review all 6 weeks): 0/2 tasks
+**Thu Jun 11** (P0 exam preparation): 0/2 tasks
+**Fri Jun 12** (Final polish and P1 setup): 0/2 tasks
+**Sat Jun 13** (P0 Final Exam - Computing Foundations): 0/3 tasks
+
+### Week 7: Bilingual Consolidation Week
+**Sun Jun 14** (Rewrite binary, ASCII, CPU notes in Arabic): 0/3 tasks
+**Mon Jun 15** (Rewrite internet and terminal notes in Arabic): 0/2 tasks
+**Tue Jun 16** (Rewrite Git and VS Code notes in Arabic): 0/2 tasks
+**Wed Jun 17** (Translate math and algebra notes): 0/2 tasks
+**Thu Jun 18** (Anki full bilingual deck review): 0/2 tasks
+**Fri Jun 19** (Final bilingual review and rest preparation): 0/2 tasks
+**Sat Jun 20** (Prepare for rest week): 0/1 tasks
+
+### Week 8: Mandatory Rest Week
+**Sun Jun 21** (Rest — no studying): 0/2 tasks
+**Mon Jun 22** (Rest day — no studying): 0/1 tasks
+**Tue Jun 23** (Rest day): 0/1 tasks
+**Wed Jun 24** (Light reflection): 0/1 tasks
+**Thu Jun 25** (Rest day): 0/1 tasks
+**Fri Jun 26** (Prepare for P1): 0/2 tasks
+**Sat Jun 27** (Final rest day): 0/1 tasks
+
+---
+*Generated by Elite CS + SWE Curriculum — Claude*

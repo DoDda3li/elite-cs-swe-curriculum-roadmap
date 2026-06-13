@@ -144,15 +144,15 @@ var W={daily:0.10,weekly:0.15,midterm:0.25,final:0.40,project:0.10};
 // Precise expected exam counts per phase (missing = 0 in grade calculation)
 var EXPECTED={
   P0: {daily:30,weekly:6,midterm:1,final:1,project:1,total:39},
-  P1: {daily:70,weekly:14,midterm:2,final:1,project:1,total:88},
+  P1: {daily:80,weekly:16,midterm:2,final:1,project:1,total:98},
   P2: {daily:30,weekly:6,midterm:1,final:1,project:1,total:39},
   P3: {daily:50,weekly:10,midterm:2,final:1,project:1,total:64},
   P4: {daily:65,weekly:13,midterm:2,final:1,project:1,total:82},
-  P5: {daily:60,weekly:12,midterm:2,final:1,project:1,total:76},
+  P5: {daily:65,weekly:13,midterm:2,final:1,project:1,total:81},
   P6: {daily:85,weekly:17,midterm:3,final:1,project:1,total:107},
   P7: {daily:65,weekly:13,midterm:2,final:1,project:1,total:82},
   P8: {daily:55,weekly:11,midterm:2,final:1,project:1,total:70},
-  P9: {daily:80,weekly:16,midterm:3,final:1,project:1,total:101},
+  P9: {daily:85,weekly:17,midterm:3,final:1,project:1,total:106},
   P10:{daily:55,weekly:11,midterm:2,final:1,project:1,total:70},
   P11:{daily:80,weekly:16,midterm:3,final:1,project:1,total:101}
 };
@@ -224,7 +224,8 @@ function totSt(){
   return{cumGPA:n?(gs/n).toFixed(2):null,pg:n,tex:tex,best:best};
 }
 
-var prog={},curPh=0,curTab=0,mainTab=0,allEx={};
+var prog={},curPh=0,curTab=0,mainTab=0,allEx={},SELF={};
+var KSELF='swe_grad_selfchecks';
 
 async function wSet(k,v){
   var s=JSON.stringify(v);var ok=false;
@@ -281,17 +282,18 @@ async function refreshGrades(){
   var b=document.getElementById('rfbtn');var b2=document.getElementById('rfbtn2');
   [b,b2].forEach(function(x){if(x){x.textContent='...';x.disabled=true;}});
   for(var i=0;i<PH.length;i++){var ex=await wGet(EK[PH[i].n]);allEx[PH[i].n]=ex||[];}
-  // Restore P0 seed exams if missing
+  SELF=await wGet(KSELF)||{};
+  // Seed P0 exams ONLY if storage came back completely empty (first run on a
+  // new device). If any saved list exists, respect it — the user may have
+  // deleted records on purpose, and seeds must never resurrect them.
   var p0seed=[
     {date:"5/4/2026",type:"daily",scope:"Day exam Sun May 3 Binary numbers and how",score:91,grade:"A+"},
     {date:"5/4/2026",type:"daily",scope:"Day exam Mon May 4 Boolean logic - AND OR",score:92,grade:"A+"}
   ];
-  p0seed.forEach(function(seed){
-    var exists=allEx.P0.some(function(e){return e.scope===seed.scope&&e.type===seed.type;});
-    if(!exists){allEx.P0.push(seed);}
-    else{var idx=allEx.P0.findIndex(function(e){return e.scope===seed.scope&&e.type===seed.type;});if(idx>=0&&seed.score>allEx.P0[idx].score)allEx.P0[idx]=seed;}
-  });
-  await wSet(EK.P0, allEx.P0);
+  if(!allEx.P0.length){
+    allEx.P0=p0seed.slice();
+    await wSet(EK.P0, allEx.P0);
+  }
   renderStats();renderRail();
   if(mainTab===1)renderTranscript();
   if(mainTab===2)renderGrad();
@@ -508,6 +510,11 @@ function renderTranscript(){
     '</div></div>';
   el.innerHTML=html;
 }
+async function toggleSelf(k){
+  SELF[k]=!SELF[k];if(!SELF[k])delete SELF[k];
+  await wSet(KSELF,SELF);
+  renderGrad();
+}
 function renderGrad(){
   var el=document.getElementById('grdp');if(!el)return;
   var st=totSt();var cumGPA=parseFloat(st.cumGPA)||0;
@@ -541,8 +548,9 @@ function renderGrad(){
     {label:'P9 AI Ethics module completed and graded',met:p9ethics,val:p9ethics?'Done':'Not completed yet'},
     {label:'P11 Capstone distributed system deployed',met:p11cap,val:p11cap?'Done':'Not submitted yet'},
     {label:'Technical blog published bilingually — P11 Week 11',met:p11blog,val:p11blog?'Done':'Not submitted yet'},
-    {label:'LeetCode 300+ problems solved — 20 patterns mastered',met:false,val:'Self-reported at graduation'},
-    {label:'3 major projects peer-reviewed publicly — P5 P7 P11',met:false,val:'Self-reported at graduation'},
+    {key:'leet',label:'LeetCode 300+ problems solved — 20 patterns mastered',met:!!SELF.leet,val:SELF.leet?'Confirmed by you':'Self-reported — click to confirm'},
+    {key:'peers',label:'3 major projects peer-reviewed publicly — P5 P7 P11',met:!!SELF.peers,val:SELF.peers?'Confirmed by you':'Self-reported — click to confirm'},
+    {key:'oss',label:'Open-source contribution habit — 1+ contribution/month from P5 onwards',met:!!SELF.oss,val:SELF.oss?'Confirmed by you':'Self-reported — click to confirm'},
   ];
   var metCount=reqs.filter(function(r){return r.met;}).length;
   var allMet=metCount===reqs.length;
@@ -553,7 +561,8 @@ function renderGrad(){
       (allMet?'All requirements met. Certificate ready.':''+metCount+'/'+reqs.length+' requirements met.')+
     '</div>'+
     reqs.map(function(r){
-      return '<div class="grad-row">'+
+      var click=r.key?' onclick="toggleSelf(\''+r.key+'\')" style="cursor:pointer" title="Click to toggle — your honest self-report"':'';
+      return '<div class="grad-row"'+click+'>'+
         '<div class="gcheck" style="background:'+(r.met?'#639922':'#e5e3dc')+';border-radius:3px">'+(r.met?SVG:'')+'</div>'+
         '<span style="flex:1;color:'+(r.met?'#1a1a1a':'#888')+'">'+r.label+'</span>'+
         '<span style="font-size:11px;font-weight:600;color:'+(r.met?'#639922':'#ba7517')+'">'+r.val+'</span>'+
@@ -660,10 +669,10 @@ weeks:[{w:1,t:'How computers work',d:'May 3-9',tags:['CS50x','Binary','ASCII','A
 res:[{ic:'H',ib:'#FAECE7',it:'#993C1D',n:'Harvard CS50x',s:'Best CS introduction. Free.',u:'https://cs50.harvard.edu/x/',h:'Week 0 and 1.'},{ic:'M',ib:'#E6F1FB',it:'#185FA5',n:'MIT Missing Semester',s:'Terminal, shell, git.',u:'https://missing.csail.mit.edu/',h:'All 11 lectures with exercises.'}],
 tools:[{n:'VS Code',s:'Day 1'},{n:'Git + GitHub',s:'Week 4'},{n:'WSL2',s:'Week 3'},{n:'Anki bilingual',s:'Daily mandatory'}]},
 
-{n:'P1',title:'Mathematical Foundations',sub:'Discrete Math · Linear Algebra · Probability and Statistics',color:'#378add',bg:'#e6f1fb',tx:'#0c447c',active:false,isNew:false,dates:'Jul 12 – Nov 14, 2026',studyWks:14,biWks:2,hours:200,exams:88,equiv:'MIT 6.042J · MIT 18.06 Strang · Harvard Stat 110',desc:'The mathematical bedrock. 12 study weeks + 2 bilingual + 1 rest + 1 buffer. Proof-writing, combinatorics, number theory, graph theory, linear algebra, probability.',ar:'الأساس الرياضي — الإثبات ونظرية الأعداد والجبر الخطي والاحتمالات.',note:'FULL DAILY PLAN ALREADY BUILT — starts Jul 12, 2026 (after P0 + 1 buffer week).',noteBg:'#e6f1fb',noteTx:'#0c447c',leet:null,peer:null,
+{n:'P1',title:'Mathematical Foundations',sub:'Discrete Math · Calculus · Linear Algebra · Probability and Statistics',color:'#378add',bg:'#e6f1fb',tx:'#0c447c',active:false,isNew:false,dates:'Jul 12 – Nov 14, 2026',studyWks:16,biWks:2,hours:230,exams:98,equiv:'MIT 6.042J · MIT 18.06 Strang · Harvard Stat 110',desc:'The mathematical bedrock. 12 study weeks + 2 bilingual + 1 rest + 1 buffer. Proof-writing, combinatorics, number theory, graph theory, linear algebra, probability.',ar:'الأساس الرياضي — الإثبات ونظرية الأعداد والجبر الخطي والاحتمالات.',note:'FULL DAILY PLAN ALREADY BUILT. CALCULUS ADDED (W15-16): do Calculus I before the probability weeks (W10-11) — continuous probability needs derivatives and integrals. Order will be fixed properly in the post-P0 calendar rebase.',noteBg:'#e6f1fb',noteTx:'#0c447c',leet:null,peer:null,
 weeks:[{w:1,t:'Logic and First Proofs',d:'Jul 5-11',tags:['MFCS Ch.1','AR','Exam W1']},{w:2,t:'Mathematical Induction',d:'Jul 12-18',tags:['Exam W2']},{w:3,t:'Sets Functions Relations',d:'Jul 19-25',tags:['Exam W3']},{w:4,t:'Number Theory and RSA',d:'Jul 26-Aug 1',tags:['Exam W4']},{w:5,t:'Combinatorics and Graph Theory',d:'Aug 2-8',tags:['Midterm Exam']},{w:6,t:'Vectors and Linear Transformations',d:'Aug 9-15',tags:['3B1B','Exam W6']},{w:7,t:'Vector Spaces and Rank',d:'Aug 16-22',tags:['Exam W7']},{w:8,t:'Eigenvalues and SVD',d:'Aug 23-29',tags:['Exam W8']},{w:9,t:'Linear Algebra Consolidation',d:'Aug 30-Sep 5',tags:['Midterm Exam 2']},{w:10,t:'Conditional Probability and Bayes',d:'Sep 6-12',tags:['Stat 110','Exam W10']},{w:11,t:'Random Variables',d:'Sep 13-19',tags:['CLT','Exam W11']},{w:13,t:'Information Theory — Shannon entropy and compression',d:'Sep 27-Oct 3',tags:['MIT 6.441','Shannon','Entropy','Huffman','NEW']},
   {w:14,t:'Numerical Methods — floating point and iterative solvers',d:'Oct 4-10',tags:['MIT 18.335','Floating point','Newton method','NEW']},
-  {w:12,t:'P1 Final Exam',d:'Oct 11-17',tags:['Midterm 2','Final']},{w:'B1',t:'Bilingual week 1 — Arabic proofs and linear algebra',d:'Sep 27-Oct 3',tags:['AR']},{w:'B2',t:'Bilingual week 2 — Arabic probability vocabulary',d:'Oct 4-10',tags:['AR']},{w:'R',t:'🌙 Rest week',d:'Oct 11 - Nov 7',isRest:true}],
+  {w:15,t:'Calculus I — limits derivatives integrals (study BEFORE Week 10 probability)',d:'TBD — rebase after P0',tags:['MIT 18.01','3B1B Essence of Calculus','NEW']},{w:16,t:'Calculus II — multivariable: partial derivatives gradients Jacobians chain rule (needed for P9 backprop)',d:'TBD — rebase after P0',tags:['MIT 18.02 selections','Gradients','NEW']},{w:12,t:'P1 Final Exam',d:'Oct 11-17',tags:['Midterm 2','Final']},{w:'B1',t:'Bilingual week 1 — Arabic proofs and linear algebra',d:'Sep 27-Oct 3',tags:['AR']},{w:'B2',t:'Bilingual week 2 — Arabic probability vocabulary',d:'Oct 4-10',tags:['AR']},{w:'R',t:'🌙 Rest week',d:'Oct 11 - Nov 7',isRest:true}],
 res:[{ic:'B',ib:'#E6F1FB',it:'#185FA5',n:'MFCS PDF — MIT',s:'Primary discrete math textbook.',u:'https://courses.csail.mit.edu/6.042/spring18/mcs.pdf',h:'Download Day 1.'},{ic:'3',ib:'#EAF3DE',it:'#3B6D11',n:'3Blue1Brown Linear Algebra',s:'16 visual chapters.',u:'https://www.youtube.com/playlist?list=PLZHQObOWTQDPD3MizzM2xVFitgF8hE_ab',h:'Watch before each Strang lecture.'},{ic:'H',ib:'#FAECE7',it:'#993C1D',n:'Harvard Stat 110',s:'34 full lectures.',u:'https://www.youtube.com/playlist?list=PL2SOU6wwxB0uwwH80KTQ6ht66KWxbzTIo',h:'Pause on every example.'}],
 tools:[{n:'Python + NumPy',s:'Projects'},{n:'Matplotlib',s:'Visualizations'},{n:'Jupyter bilingual',s:'Document work'},{n:'Anki bilingual',s:'Math vocab AR+EN'}]},
 
@@ -683,12 +692,12 @@ weeks:[{w:1,t:'Arrays and linked lists',d:'Apr 25-May 1',tags:['CS61B','AR']},{w
 res:[{ic:'B',ib:'#FAEEDA',it:'#854F0B',n:'Berkeley CS61B Spring 2024',s:'Most rigorous DS course.',u:'https://sp24.datastructur.es/',h:'All 4 projects required.'},{ic:'N',ib:'#EAF3DE',it:'#3B6D11',n:'NeetCode 150',s:'Pattern-based prep.',u:'https://neetcode.io/',h:'2-3 problems/day from Week 3.'}],
 tools:[{n:'Java (OpenJDK)',s:'CS61B required'},{n:'IntelliJ IDEA CE',s:'CS61B IDE'},{n:'LeetCode',s:'Pattern tracking'}]},
 
-{n:'P5',title:'Web Development Full Stack',sub:'HTML/CSS · JavaScript · React · React Native (Mobile) · Node.js · PostgreSQL · TypeScript',color:'#d85a30',bg:'#faece7',tx:'#4a1b0c',active:false,isNew:false,dates:'Oct 3, 2027 - Feb 12, 2028',studyWks:12,biWks:2,hours:195,exams:76,equiv:'The Odin Project · Full Stack Open Helsinki',desc:'Build real things. HTML/CSS, JavaScript, React, Node.js, PostgreSQL, REST APIs, testing, CI/CD, TypeScript. Mobile Development module (React Native — build and ship to App Store/Play Store). One live deployed web application + one mobile prototype. Technical writing graded. First peer review.',ar:'تطوير الويب — بناء تطبيقات حقيقية بالواجهة الأمامية والخلفية وقاعدة البيانات، ومقدّمة لتطوير الجوّال (React Native).',note:'Technical writing graded in Week 11. First mandatory peer review. Mobile Development module added — ship at least one React Native prototype.',noteBg:'#faece7',noteTx:'#4a1b0c',leet:'LeetCode Medium — 2/week. Target 150 total.',peer:'P5 capstone app posted on GitHub and shared on r/learnprogramming or r/webdev for community feedback.',
-weeks:[{w:1,t:'HTML and CSS responsive',d:'Aug 29-Sep 4',tags:['MDN','Flexbox','AR']},{w:2,t:'JavaScript fundamentals',d:'Sep 5-11',tags:['javascript.info']},{w:3,t:'JavaScript async promises fetch',d:'Sep 12-18',tags:['async/await']},{w:4,t:'React hooks state',d:'Sep 19-25',tags:['React Docs','Midterm Exam']},{w:5,t:'React advanced patterns',d:'Sep 26-Oct 2',tags:['Context','Router']},{w:6,t:'Node.js and Express APIs',d:'Oct 3-9',tags:['REST API']},{w:7,t:'SQL and PostgreSQL',d:'Oct 10-16',tags:['Joins','Schema']},{w:8,t:'Full stack auth security',d:'Oct 17-23',tags:['JWT','Midterm Exam 2']},{w:9,t:'Testing frontend backend E2E',d:'Oct 24-30',tags:['Jest','Cypress']},{w:10,t:'DevOps Docker CI/CD',d:'Oct 31-Nov 6',tags:['Docker']},{w:11,t:'TypeScript and API docs graded',d:'Nov 7-13',tags:['TypeScript','NEW']},{w:12,t:'P5 Final Exam and peer review',d:'Nov 14-20',tags:['Midterm Exam 3','Final','Peer Review']},{w:'B1',t:'Bilingual week 1 — web concepts in Arabic',d:'Nov 21-27',tags:['AR']},{w:'B2',t:'Bilingual week 2 — write Arabic README',d:'Nov 28-Dec 4',tags:['AR']},{w:'R',t:'🌙 Rest week',d:'Dec 5 - Jan 9',isRest:true}],
+{n:'P5',title:'Web Development Full Stack',sub:'HTML/CSS · JavaScript · React · React Native (Mobile) · Node.js · PostgreSQL · TypeScript',color:'#d85a30',bg:'#faece7',tx:'#4a1b0c',active:false,isNew:false,dates:'Oct 3, 2027 - Feb 12, 2028',studyWks:13,biWks:2,hours:210,exams:81,equiv:'The Odin Project · Full Stack Open Helsinki',desc:'Build real things. HTML/CSS, JavaScript, React, Node.js, PostgreSQL, REST APIs, testing, CI/CD, TypeScript. Mobile Development module (React Native — build and ship to App Store/Play Store). One live deployed web application + one mobile prototype. Technical writing graded. First peer review.',ar:'تطوير الويب — بناء تطبيقات حقيقية بالواجهة الأمامية والخلفية وقاعدة البيانات، ومقدّمة لتطوير الجوّال (React Native).',note:'Technical writing graded in Week 11. First mandatory peer review. Mobile Development module added — ship at least one React Native prototype. i18n/RTL module added (W13) — core domain for Arabic-language CS education tools. OSS HABIT STARTS HERE: one small open-source contribution (docs fix, issue triage, or PR to someone else\'s project) per month, from P5 through graduation.',noteBg:'#faece7',noteTx:'#4a1b0c',leet:'LeetCode Medium — 2/week. Target 150 total.',peer:'P5 capstone app posted on GitHub and shared on r/learnprogramming or r/webdev for community feedback.',
+weeks:[{w:1,t:'HTML and CSS responsive',d:'Aug 29-Sep 4',tags:['MDN','Flexbox','AR']},{w:2,t:'JavaScript fundamentals',d:'Sep 5-11',tags:['javascript.info']},{w:3,t:'JavaScript async promises fetch',d:'Sep 12-18',tags:['async/await']},{w:4,t:'React hooks state',d:'Sep 19-25',tags:['React Docs','Midterm Exam']},{w:5,t:'React advanced patterns',d:'Sep 26-Oct 2',tags:['Context','Router']},{w:6,t:'Node.js and Express APIs',d:'Oct 3-9',tags:['REST API']},{w:7,t:'SQL and PostgreSQL',d:'Oct 10-16',tags:['Joins','Schema']},{w:8,t:'Full stack auth security',d:'Oct 17-23',tags:['JWT','Midterm Exam 2']},{w:9,t:'Testing frontend backend E2E',d:'Oct 24-30',tags:['Jest','Cypress']},{w:10,t:'DevOps Docker CI/CD',d:'Oct 31-Nov 6',tags:['Docker']},{w:11,t:'TypeScript and API docs graded',d:'Nov 7-13',tags:['TypeScript','NEW']},{w:13,t:'Internationalization — RTL layout Arabic typography i18n bidirectional UI',d:'TBD — rebase after P0',tags:['RTL','i18n','Arabic UI','NEW','AR']},{w:12,t:'P5 Final Exam and peer review',d:'Nov 14-20',tags:['Midterm Exam 3','Final','Peer Review']},{w:'B1',t:'Bilingual week 1 — web concepts in Arabic',d:'Nov 21-27',tags:['AR']},{w:'B2',t:'Bilingual week 2 — write Arabic README',d:'Nov 28-Dec 4',tags:['AR']},{w:'R',t:'🌙 Rest week',d:'Dec 5 - Jan 9',isRest:true}],
 res:[{ic:'O',ib:'#FAECE7',it:'#993C1D',n:'The Odin Project',s:'Best free web dev curriculum.',u:'https://www.theodinproject.com/',h:'Full Stack JS path.'},{ic:'F',ib:'#EAF3DE',it:'#3B6D11',n:'Full Stack Open Helsinki',s:'React, Node, DB, testing.',u:'https://fullstackopen.com/en/',h:'Parts 0-8.'}],
 tools:[{n:'Node.js + npm',s:'Backend'},{n:'PostgreSQL',s:'Primary DB'},{n:'Postman',s:'API testing'},{n:'Cypress',s:'E2E testing'}]},
 
-{n:'P6',title:'Computer Systems',sub:'CMU CS:APP · x86-64 Assembly · Parallel/GPU · Nand2Tetris · xv6 · Compilers',color:'#993c1d',bg:'#faece7',tx:'#4a1b0c',active:false,isNew:false,dates:'Feb 20 - Aug 5, 2028',studyWks:17,biWks:2,hours:230,exams:107,equiv:'CMU 15-213 CS:APP · MIT 6.S081 · Nand2Tetris · Stanford CS143',desc:'EXPANDED to 16 study weeks. CS:APP gets 5 weeks with all 6 labs. Nand2Tetris 3 weeks. xv6 OS 4 weeks. Compilers 2 weeks. Parallel and GPU programming added.',ar:'أنظمة الحاسوب — من الترانزستور إلى نواة نظام التشغيل.',note:'P6 expanded from 12 to 16 study weeks. Do not rush CS:APP. All 6 labs are mandatory.',noteBg:'#faece7',noteTx:'#4a1b0c',leet:'LeetCode Hard — 1/week minimum.',peer:'P6 systems project posted on GitHub for public review.',
+{n:'P6',title:'Computer Systems',sub:'CMU CS:APP · x86-64 Assembly · Parallel/GPU · Nand2Tetris · xv6 · Compilers',color:'#993c1d',bg:'#faece7',tx:'#4a1b0c',active:false,isNew:false,dates:'Feb 20 - Aug 5, 2028',studyWks:17,biWks:2,hours:230,exams:107,equiv:'CMU 15-213 CS:APP · MIT 6.S081 · Nand2Tetris · Stanford CS143',desc:'EXPANDED to 17 study weeks. CS:APP gets 5 weeks with all 6 labs. Nand2Tetris 3 weeks. xv6 OS 4 weeks. Compilers 2 weeks. Parallel and GPU programming added.',ar:'أنظمة الحاسوب — من الترانزستور إلى نواة نظام التشغيل.',note:'P6 expanded from 12 to 17 study weeks. Do not rush CS:APP. All 6 labs are mandatory.',noteBg:'#faece7',noteTx:'#4a1b0c',leet:'LeetCode Hard — 1/week minimum.',peer:'P6 systems project posted on GitHub for public review.',
 weeks:[{w:1,t:'C mastery and x86-64 assembly',d:'Jan 10-16',tags:['CS:APP Ch.1-3','GDB','AR']},{w:2,t:'CS:APP Data Lab bit manipulation',d:'Jan 17-23',tags:['CS:APP Ch.2']},{w:3,t:'CS:APP Bomb Lab',d:'Jan 24-30',tags:['CS:APP Ch.3','x86-64']},{w:4,t:'CS:APP Cache Lab memory hierarchy',d:'Jan 31-Feb 6',tags:['CS:APP Ch.6','Midterm Exam']},{w:5,t:'CS:APP Shell Lab and Malloc Lab',d:'Feb 7-13',tags:['CS:APP Ch.7-8','Peer Review']},{w:6,t:'Parallel programming pthreads OpenMP',d:'Feb 14-20',tags:['pthreads','OpenMP','NEW']},{w:7,t:'GPU programming CUDA fundamentals',d:'Feb 21-27',tags:['CUDA','GPU memory','NEW','Midterm Exam 2']},{w:8,t:'Nand2Tetris Part I Boolean to CPU',d:'Feb 28-Mar 6',tags:['CPU from NAND','ALU']},{w:9,t:'Nand2Tetris Part II VM translator',d:'Mar 7-13',tags:['Stack machine']},{w:10,t:'Nand2Tetris Part III Jack compiler',d:'Mar 14-20',tags:['Jack compiler','Midterm Exam 3']},{w:11,t:'xv6 OS I system calls processes',d:'Mar 21-27',tags:['MIT 6.S081']},{w:12,t:'xv6 OS II virtual memory',d:'Mar 28-Apr 3',tags:['pgtbl lab']},{w:13,t:'xv6 OS III concurrency and locks',d:'Apr 4-10',tags:['lock lab','Midterm Exam 4']},{w:14,t:'xv6 OS IV file systems',d:'Apr 11-17',tags:['FS lab']},{w:15,t:'Compilers I lexing parsing ASTs',d:'Apr 18-24',tags:['Stanford CS143']},{w:17,t:'Computer Architecture — pipelining branch prediction RISC-V',d:'May 2-8',tags:['Patterson Hennessy','RISC-V','Pipelining','NEW']},
   {w:16,t:'Compilers II and P6 Final Exam',d:'May 9-15',tags:['Code gen','Final']},{w:'B1',t:'Bilingual week 1 — systems in Arabic',d:'May 2-8',tags:['AR']},{w:'B2',t:'Bilingual week 2 — bilingual systems glossary',d:'May 9-15',tags:['AR']},{w:'R',t:'🌙 Rest week — you earned it',d:'May 16 - Jun 27',isRest:true}],
 res:[{ic:'C',ib:'#FAECE7',it:'#993C1D',n:'CS:APP CMU',s:'Most influential systems book.',u:'http://csapp.cs.cmu.edu/3e/home.html',h:'5 weeks. All 6 labs.'},{ic:'N',ib:'#EAF3DE',it:'#3B6D11',n:'Nand2Tetris',s:'CPU to OS. 12 projects.',u:'https://www.nand2tetris.org/',h:'3 weeks. All 12 projects.'},{ic:'M',ib:'#E6F1FB',it:'#185FA5',n:'MIT 6.S081 xv6',s:'OS with labs.',u:'https://pdos.csail.mit.edu/6.828/2021/',h:'4 weeks. All 10 labs.'}],
@@ -705,10 +714,10 @@ weeks:[{w:1,t:'Software construction MIT 6.031',d:'Nov 23-29',tags:['Specs','ADT
 res:[{ic:'M',ib:'#E6F1FB',it:'#185FA5',n:'MIT 6.031',s:'Writing maintainable code.',u:'https://web.mit.edu/6.031/www/',h:'All readings and problem sets.'},{ic:'W',ib:'#EAF3DE',it:'#3B6D11',n:'PortSwigger Web Security',s:'All OWASP Top 10 labs.',u:'https://portswigger.net/web-security',h:'All labs required.'},{ic:'G',ib:'#EAF3DE',it:'#3B6D11',n:'Google SRE Book',s:'Production systems.',u:'https://sre.google/sre-book/table-of-contents/',h:'Chapters 1-16.'}],
 tools:[{n:'pytest + Selenium',s:'Testing'},{n:'Burp Suite CE',s:'Security testing'},{n:'Docker + Compose',s:'Containers'},{n:'GitHub Actions',s:'CI/CD'}]},
 
-{n:'P9',title:'AI and Machine Learning',sub:'Stanford CS229 · Karpathy Zero to Hero · fast.ai · nanoGPT · AI Ethics',color:'#d4537e',bg:'#fbeaf0',tx:'#4b1528',active:false,isNew:false,dates:'May 20 - Oct 13, 2029',studyWks:16,biWks:2,hours:230,exams:101,equiv:'Stanford CS229 · Stanford CS231n · Karpathy · fast.ai',desc:'Rigorous ML from foundations through modern deep learning. GPU foundation from P6. Build backprop and nanoGPT from scratch. Paper reproduction. AI Ethics formally graded.',ar:'الذكاء الاصطناعي وتعلم الآلة — من الأساسيات الرياضية إلى بناء GPT من الصفر. أخلاقيات الذكاء الاصطناعي.',note:'AI Ethics Week 13 includes AI impact on Muslim-majority countries and Arabic language models.',noteBg:'#fbeaf0',noteTx:'#4b1528',leet:'LeetCode Hard — 1-2/week. Target 260 total.',peer:null,
+{n:'P9',title:'AI and Machine Learning',sub:'Stanford CS229 · Karpathy Zero to Hero · fast.ai · nanoGPT · AI Ethics',color:'#d4537e',bg:'#fbeaf0',tx:'#4b1528',active:false,isNew:false,dates:'May 20 - Oct 13, 2029',studyWks:17,biWks:2,hours:245,exams:106,equiv:'Stanford CS229 · Stanford CS231n · Karpathy · fast.ai',desc:'Rigorous ML from foundations through modern deep learning. GPU foundation from P6. Build backprop and nanoGPT from scratch. Paper reproduction. AI Ethics formally graded.',ar:'الذكاء الاصطناعي وتعلم الآلة — من الأساسيات الرياضية إلى بناء GPT من الصفر. أخلاقيات الذكاء الاصطناعي.',note:'AI Ethics Week 13 includes AI impact on Muslim-majority countries and Arabic language models.',noteBg:'#fbeaf0',noteTx:'#4b1528',leet:'LeetCode Hard — 1-2/week. Target 260 total.',peer:null,
 weeks:[{w:1,t:'ML foundations supervised learning',d:'Mar 22-28',tags:['CS229','AR']},{w:2,t:'Bias-variance regularisation',d:'Mar 29-Apr 4',tags:['CS229']},{w:3,t:'SVMs trees ensembles',d:'Apr 5-11',tags:['Midterm Exam']},{w:4,t:'Neural networks backprop from scratch',d:'Apr 12-18',tags:['Karpathy micrograd']},{w:5,t:'Training tricks batch norm dropout',d:'Apr 19-25',tags:['Karpathy makemore']},{w:6,t:'CNNs convolutional networks',d:'Apr 26-May 2',tags:['CS231n','Midterm Exam 2']},{w:7,t:'RNNs LSTMs sequence models',d:'May 3-9',tags:['Karpathy']},{w:8,t:'Attention mechanism transformers',d:'May 10-16',tags:['Attention paper 2017']},{w:9,t:'Build nanoGPT from scratch',d:'May 17-23',tags:['Karpathy nanoGPT']},{w:10,t:'fast.ai practical deep learning',d:'May 24-30',tags:['fast.ai','Midterm Exam 3']},{w:11,t:'Unsupervised VAEs GANs Diffusion',d:'May 31-Jun 6',tags:['Generative models']},{w:12,t:'MLOps model deployment',d:'Jun 7-13',tags:['PyTorch serving','ONNX']},{w:13,t:'AI Ethics bias fairness safety — graded',d:'Jun 14-20',tags:['AI safety','Midterm Exam 4','NEW','AR']},{w:15,t:'Arabic NLP — morphology tokenization AraBERT CAMeL Arabic AI',d:'Jun 28-Jul 4',tags:['Stanford CS224N','AraBERT','CAMeL','Arabic NLP','NEW','AR']},
   {w:16,t:'Computer Vision — OpenCV feature detection 3D reconstruction',d:'Jul 5-11',tags:['CS231n advanced','OpenCV','Feature detection','NEW']},
-  {w:14,t:'Paper reproduction P9 Final Exam',d:'Jul 12-18',tags:['ICLR/NeurIPS','Final']},{w:'B1',t:'Bilingual week 1 — ML vocabulary in Arabic',d:'Jun 28-Jul 4',tags:['AR']},{w:'B2',t:'Bilingual week 2 — AI ethics in Arabic context',d:'Jul 5-11',tags:['AR']},{w:'R',t:'🌙 Rest week',d:'Jul 12 - Aug 16',isRest:true}],
+  {w:17,t:'Post-training and safety — fine-tuning RLHF evals interpretability basics',d:'TBD — rebase after P0',tags:['RLHF','Evals','Interpretability','AI safety','NEW']},{w:14,t:'Paper reproduction P9 Final Exam',d:'Jul 12-18',tags:['ICLR/NeurIPS','Final']},{w:'B1',t:'Bilingual week 1 — ML vocabulary in Arabic',d:'Jun 28-Jul 4',tags:['AR']},{w:'B2',t:'Bilingual week 2 — AI ethics in Arabic context',d:'Jul 5-11',tags:['AR']},{w:'R',t:'🌙 Rest week',d:'Jul 12 - Aug 16',isRest:true}],
 res:[{ic:'S',ib:'#FAEEDA',it:'#854F0B',n:'Stanford CS229',s:'Andrew Ng rigorous ML.',u:'https://cs229.stanford.edu/',h:'All notes and problem sets.'},{ic:'K',ib:'#EAF3DE',it:'#3B6D11',n:'Karpathy Zero to Hero',s:'Build backprop and GPT from scratch.',u:'https://karpathy.ai/zero-to-hero.html',h:'THE best deep learning course.'},{ic:'F',ib:'#EAF3DE',it:'#3B6D11',n:'fast.ai',s:'Practical top-down.',u:'https://course.fast.ai/',h:'Work every notebook.'}],
 tools:[{n:'PyTorch',s:'Primary DL'},{n:'Google Colab',s:'Free GPU'},{n:'Weights and Biases',s:'Experiment tracking'}]},
 
@@ -719,7 +728,7 @@ res:[{ic:'M',ib:'#E6F1FB',it:'#185FA5',n:'MIT 6.5840',s:'Distributed systems. La
 tools:[{n:'Go (golang.org)',s:'Required for 6.5840'},{n:'goroutines + channels',s:'Go concurrency'}]},
 
 {n:'P11',title:'System Design Career and Graduation',sub:'FAANG System Design · Mock Interviews · Production Capstone · 300+ LeetCode',color:'#5f5e5a',bg:'#f1efe8',tx:'#2c2c2a',active:false,isNew:false,dates:'Feb 17 - Jun 29, 2030',studyWks:16,biWks:2,hours:240,exams:101,equiv:'System Design Primer · Pramp · interviewing.io',desc:'The final phase. EXPANDED from 12 to 16 study weeks to give Production Capstone, Mock Interviews, System Design, and Technical Blog adequate depth. Design systems at Google scale. Mock interviews with real humans. Build and deploy a production-grade distributed system. Technical blog published bilingually. LeetCode 300+ confirmed.',ar:'المرحلة النهائية — تصميم الأنظمة، مقابلات محاكاة، مشروع التخرج، ومقال تقني منشور بالعربية والإنجليزية.',note:'GRADUATION: LeetCode 300+ confirmed. Technical blog published. Three peer reviews completed.',noteBg:'#f1efe8',noteTx:'#2c2c2a',leet:'LeetCode Hard — 2/week. FINAL target: 300+ all 20 patterns mastered.',peer:'P11 capstone posted on GitHub and Hacker News. Technical blog published bilingually.',
-weeks:[{w:1,t:'System design fundamentals',d:'Dec 7-13',tags:['Scalability','CAP','AR']},{w:2,t:'System design databases at scale',d:'Dec 14-20',tags:['Sharding','Replication']},{w:3,t:'System design caching queues CDNs',d:'Dec 21-27',tags:['Redis','Midterm Exam']},{w:4,t:'Mock system design interviews 4 sessions',d:'Dec 28-Jan 3',tags:['Pramp','Design Twitter']},{w:5,t:'Coding interview prep LeetCode 300+',d:'Jan 4-10',tags:['NeetCode hard']},{w:6,t:'Mock coding interviews Pramp',d:'Jan 11-17',tags:['Midterm Exam 2']},{w:7,t:'Capstone architecture and planning',d:'Jan 18-24',tags:['ADRs']},{w:8,t:'Capstone core features TDD',d:'Jan 25-31',tags:['MVP','Tests']},{w:9,t:'Capstone persistence horizontal scaling',d:'Feb 1-7',tags:['PostgreSQL','Midterm Exam 3']},{w:10,t:'Capstone distributed features benchmarks',d:'Feb 8-14',tags:['k6','Kubernetes']},{w:11,t:'Capstone deploy and technical blog graded',d:'Feb 15-21',tags:['GCP/AWS','Peer Review','NEW']},{w:12,t:'Graduation week and certificate',d:'Feb 22-28',tags:['Final','Certificate']},{w:'B1',t:'Bilingual week 1 — system design in Arabic',d:'Mar 1-7',tags:['AR']},{w:'B2',t:'Bilingual week 2 — Arabic technical blog',d:'Mar 8-14',tags:['AR','مقال تقني عربي']},{w:'R',t:'🌙 Final rest — Elite CS + SWE Curriculum completed',d:'Mar 15 - Aug 1',isRest:true}],
+weeks:[{w:1,t:'System design fundamentals',d:'Dec 7-13',tags:['Scalability','CAP','AR']},{w:2,t:'System design databases at scale',d:'Dec 14-20',tags:['Sharding','Replication']},{w:3,t:'System design caching queues CDNs',d:'Dec 21-27',tags:['Redis','Midterm Exam']},{w:4,t:'Mock system design interviews 4 sessions',d:'Dec 28-Jan 3',tags:['Pramp','Design Twitter']},{w:5,t:'Coding interview prep LeetCode 300+',d:'Jan 4-10',tags:['NeetCode hard']},{w:6,t:'Mock coding interviews Pramp',d:'Jan 11-17',tags:['Midterm Exam 2']},{w:7,t:'Capstone architecture and planning',d:'Jan 18-24',tags:['ADRs']},{w:8,t:'Capstone core features TDD',d:'Jan 25-31',tags:['MVP','Tests']},{w:9,t:'Capstone persistence horizontal scaling',d:'Feb 1-7',tags:['PostgreSQL','Midterm Exam 3']},{w:10,t:'Capstone distributed features benchmarks',d:'Feb 8-14',tags:['k6','Kubernetes']},{w:11,t:'Capstone deploy and technical blog graded',d:'Feb 15-21',tags:['GCP/AWS','Peer Review','NEW']},{w:12,t:'Capstone hardening — observability monitoring load testing',d:'TBD — rebase after P0',tags:['k6','Grafana','NEW']},{w:13,t:'Mock interview intensive II — coding and system design sessions',d:'TBD — rebase after P0',tags:['Pramp','interviewing.io','NEW']},{w:14,t:'System design deep dives — design 4 real systems end to end',d:'TBD — rebase after P0',tags:['Design YouTube','Design Uber','NEW']},{w:15,t:'Technical blog series — bilingual posts on the capstone',d:'TBD — rebase after P0',tags:['AR','Blog','NEW']},{w:16,t:'Graduation week and certificate',d:'TBD — rebase after P0',tags:['Final','Certificate']},{w:'B1',t:'Bilingual week 1 — system design in Arabic',d:'Mar 1-7',tags:['AR']},{w:'B2',t:'Bilingual week 2 — Arabic technical blog',d:'Mar 8-14',tags:['AR','مقال تقني عربي']},{w:'R',t:'🌙 Final rest — Elite CS + SWE Curriculum completed',d:'Mar 15 - Aug 1',isRest:true}],
 res:[{ic:'S',ib:'#F1EFE8',it:'#5F5E5A',n:'System Design Primer',s:'GitHub 200k stars.',u:'https://github.com/donnemartin/system-design-primer',h:'Read entire guide.'},{ic:'P',ib:'#EAF3DE',it:'#3B6D11',n:'Pramp',s:'Free mock interviews.',u:'https://www.pramp.com/',h:'2 system design + 2 coding per week.'},{ic:'N',ib:'#F1EFE8',it:'#5F5E5A',n:'NeetCode 150',s:'All patterns.',u:'https://neetcode.io/',h:'All 150 before Week 5.'}],
 tools:[{n:'Docker + Kubernetes',s:'Deployment'},{n:'PostgreSQL + Redis',s:'Persistence'},{n:'k6',s:'Load testing'},{n:'GCP / AWS free',s:'Cloud'}]}
 ];
@@ -730,8 +739,11 @@ tools:[{n:'Docker + Kubernetes',s:'Deployment'},{n:'PostgreSQL + Redis',s:'Persi
 var WEIGHTS={daily:0.10,weekly:0.15,midterm:0.25,final:0.40,project:0.10};
 var P0_EXPECTED={daily:30,weekly:6,midterm:1,final:1,project:1};
 
-function calcWeightedScore(examList){
+// pn = phase name like 'P0','P1'... Uses that phase's own expected exam
+// counts from EXPECTED. Falls back to P0's only if the phase is unknown.
+function calcWeightedScore(examList,pn){
   if(!examList||!examList.length) return null;
+  var EXP=(pn&&EXPECTED[pn])?EXPECTED[pn]:P0_EXPECTED;
   var groups={daily:[],weekly:[],midterm:[],final:[],project:[]};
   examList.forEach(function(e){
     var t=e.type==='monthly'?'midterm':e.type||'daily';
@@ -742,7 +754,7 @@ function calcWeightedScore(examList){
   Object.keys(WEIGHTS).forEach(function(t){
     var taken=groups[t]||[];
     if(taken.length) anyTaken=true;
-    var expected=P0_EXPECTED[t]||1;
+    var expected=EXP[t]||1;
     var avg=taken.length?(taken.reduce(function(a,b){return a+b;},0)/expected):0;
     score+=avg*(WEIGHTS[t]||0);
   });
@@ -763,7 +775,7 @@ function syncToMemory(){
   var phLines=PH.map(function(p,pi){
     var c2=phDone(pi);
     var ex=allEx[p.n]||[];
-    var weighted=calcWeightedScore(ex);
+    var weighted=calcWeightedScore(ex,p.n);
     var grade=weighted!==null?gradeFromScore(weighted):'none';
     var p2=c2.total?Math.round(c2.done/c2.total*100):0;
     return p.n+':'+p2+'%('+c2.done+'/'+c2.total+'wks,'+ex.length+'exams,grade:'+grade+')';
@@ -825,7 +837,7 @@ async function githubSync(){
     PH.forEach(function(p,pi){
       var c2=phDone(pi);
       var ex=allEx[p.n]||[];
-      var weighted=calcWeightedScore(ex);
+      var weighted=calcWeightedScore(ex,p.n);
       var grade=weighted!==null?gradeFromScore(weighted):'—';
       var status=pi<curPh?'✅':pi===curPh?'🟡':'⬜';
       lines.push('| '+status+' '+p.n+' | '+p.title+' | '+c2.done+'/'+c2.total+' | '+ex.length+' | '+grade+' |');
@@ -872,6 +884,7 @@ async function init(){
   prog=await wGet(KW)||{};
   var st=await wGet(KS);if(st&&st.ph!=null)curPh=Math.min(st.ph,PH.length-1);
   for(var i=0;i<PH.length;i++){var ex=await wGet(EK[PH[i].n]);allEx[PH[i].n]=ex||[];}
+  SELF=await wGet(KSELF)||{};
   var ok=await wSet('swe_v12_ping',Date.now());
   setSbar(ok?'ok':'warn',ok?'Synced to your Claude account — works on all devices':'Saved locally only on this device');
   var ok=await wSet('swe_v12_ping',Date.now());

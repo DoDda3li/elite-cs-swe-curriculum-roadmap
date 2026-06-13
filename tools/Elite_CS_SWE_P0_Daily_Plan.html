@@ -172,6 +172,10 @@ kbd{display:inline-block;padding:1px 5px;border:1px solid #ccc;border-radius:3px
     <div class="export-row">
       <button class="btn btnp" id="copybtn" onclick="copyExport()">📋 Copy to clipboard</button>
       <button class="btn btnp" onclick="downloadProgress()" style="background:#185FA5;color:#fff;border-color:#185FA5">💾 Download .md</button>
+      <button class="btn" onclick="openPhaseRecord()" style="border-color:#7F77DD;color:#534AB7">🎓 Phase Record</button>
+      <button class="btn" onclick="backupJSON()" style="border-color:#0f6e56;color:#0f6e56">🗄 Backup (.json)</button>
+      <button class="btn" onclick="openRestore()" style="border-color:#ba7517;color:#854F0B">📥 Restore</button>
+      <button class="btn btnp" id="applyrestorebtn" onclick="applyRestore()" style="display:none;background:#854F0B;color:#fff;border-color:#854F0B">✓ Apply restore</button>
       <a class="btn" href="https://github.com/DoDda3li/elite-cs-swe-curriculum-roadmap/edit/main/PROGRESS.md" target="_blank" rel="noopener noreferrer" style="text-decoration:none;padding:6px 12px">Open PROGRESS.md ↗</a>
       <button class="btn" onclick="document.getElementById('expmodal').classList.remove('on')">Close</button>
     </div>
@@ -189,10 +193,11 @@ var TP={W:{bg:'#E6F1FB',tx:'#185FA5',l:'Watch'},R:{bg:'#EAF3DE',tx:'#3B6D11',l:'
 // ─── STORAGE KEYS ─────────────────────────────────────────────────────────
 var KP='p0_v3_prog', KE='p0_v3_exams', KC='p0_v3_wkchecks';
 // ─── API MODEL — tiered by stakes ─────────────────────────────────────────
-// Daily/Weekly: Sonnet 4.6 (fast, cheap, strong). Midterm/Final/Project: Opus 4.7 (best reasoning).
+// Daily/Weekly: Sonnet 4.6 (fast, cheap, strong). Midterm/Final/Project: Opus 4.8 (best reasoning).
 var MODEL_LOW='claude-sonnet-4-6';
-var MODEL_HIGH='claude-opus-4-7';
+var MODEL_HIGH='claude-opus-4-8';
 var MODEL_FALLBACK='claude-sonnet-4-20250514';
+var LAST_MODEL='';   // records which model actually answered the last API call
 function pickModel(examType){
   // examType is 'daily','weekly','midterm','final','project' (or legacy 'monthly' = midterm)
   var hi=(examType==='midterm'||examType==='monthly'||examType==='final'||examType==='project');
@@ -200,7 +205,7 @@ function pickModel(examType){
 }
 
 // ─── SANITISE — strips quotes/newlines that break JSON prompts ────────────
-function s(v){return String(v||'').replace(/\\/g,'').replace(/"/g,"'").replace(/'/g,"'").replace(/[\n\r]/g,' ').trim();}
+function s(v){return String(v||'').replace(/\\/g,'').replace(/"/g,"'").replace(/[\n\r]/g,' ').trim();}
 
 // ─── STATE ────────────────────────────────────────────────────────────────
 var prog={}, exams=[], chks={};
@@ -570,6 +575,7 @@ function renderExam(){
 // ─── API CALL ─────────────────────────────────────────────────────────────
 async function apiCall(prompt, model){
   var useModel=model||MODEL_LOW;
+  LAST_MODEL=useModel;
   var res;
   try{
     res=await fetch('https://api.anthropic.com/v1/messages',{
@@ -581,6 +587,7 @@ async function apiCall(prompt, model){
     if(res.status===400||res.status===404){
       var t1=await res.text().catch(function(){return '';});
       if(/model/i.test(t1)){
+        LAST_MODEL=MODEL_FALLBACK;
         res=await fetch('https://api.anthropic.com/v1/messages',{
           method:'POST',
           headers:{'Content-Type':'application/json'},
@@ -615,6 +622,10 @@ async function genExam(){
       :et==='final'
       ?'P0 FINAL EXAM comprehensive all 6 weeks: binary ASCII CPU boolean logic internet HTTP DNS TCP Linux terminal shell scripting Git GitHub VS Code debugging regex algebra functions set theory'
       :'P0 Week '+w2.w+' '+s(w2.title)+' '+w2.dates;
+    // Daily exams from this tab must be unique per calendar day, otherwise
+    // every daily taken in the same week collapses into one record (keep-best)
+    // and the daily component can never fill its 30 expected slots.
+    if(et==='daily') scope+=' — '+new Date().toLocaleDateString();
   }
   var pts=Math.round(100/nq);
   es='generating'; renderExam();
@@ -678,12 +689,23 @@ async function submitExam(){
     while(result.scores.length<nq)result.scores.push(0);
     if(!Array.isArray(result.feedback))result.feedback=Array(nq).fill('No feedback');
     while(result.feedback.length<nq)result.feedback.push('No feedback');
-    result.score=Number(result.score)||0;
-    result.grade=String(result.grade||'F');
+    // ── NEVER trust the model's arithmetic ──
+    // Clamp each per-question score to [0, its points], then compute the
+    // total and letter grade LOCALLY. The model's own "score"/"grade"
+    // fields are ignored — models can miscount their own sums.
+    var ptsTotal=0, earned=0;
+    result.scores=result.scores.map(function(sc,i){
+      var maxPts=Number((examObj.questions[i]||{}).pts)||Math.round(100/nq);
+      var v=Math.max(0,Math.min(Number(sc)||0,maxPts));
+      ptsTotal+=maxPts; earned+=v;
+      return v;
+    });
+    result.score=ptsTotal>0?Math.round(earned/ptsTotal*100):0;
+    result.grade=gradeFromScore(result.score);
     result.summary=String(result.summary||'Exam graded.');
     examObj.result=result;
     // ── AUTO-SAVE GRADE — keep best score per day+type (graduation-safe) ──
-    var entry={date:examObj.date,scope:examObj.scope,score:result.score,grade:result.grade,type:examObj.type,improvement:result.improvement||''};
+    var entry={date:examObj.date,scope:examObj.scope,score:result.score,grade:result.grade,type:examObj.type,improvement:result.improvement||'',model:LAST_MODEL};
     var eType=entry.type==='monthly'?'midterm':entry.type;
     entry.type=eType;
     // Match on scope+type — scope contains the study day so each day is unique
@@ -1078,6 +1100,9 @@ async function keepBestOnly(){
   }
 }
 function openExport(){
+  EXPORT_FILENAME='PROGRESS.md';
+  var ta0=document.getElementById('export-ta');if(ta0){ta0.readOnly=true;}
+  var ab0=document.getElementById('applyrestorebtn');if(ab0)ab0.style.display='none';
   var cnt=allC();var pct=cnt.t?Math.round(cnt.d/cnt.t*100):0;
   var date=new Date().toLocaleDateString('en-GB',{year:'numeric',month:'long',day:'numeric'});
   var lines=[];
@@ -1160,6 +1185,7 @@ function copyExport(){
 }
 
 // ─── DOWNLOAD AS PROGRESS.md FILE (most reliable export path) ────────────────
+var EXPORT_FILENAME='PROGRESS.md'; // changed by openPhaseRecord()
 function downloadProgress(){
   var content=document.getElementById('export-ta').value;
   if(!content||content.length<50){
@@ -1174,7 +1200,7 @@ function downloadProgress(){
     var url=URL.createObjectURL(blob);
     var a=document.createElement('a');
     a.href=url;
-    a.download='PROGRESS.md';
+    a.download=EXPORT_FILENAME;
     document.body.appendChild(a);
     a.click();
     setTimeout(function(){
@@ -1231,8 +1257,106 @@ function syncToMemory(){
 
 
 
+
+// ─── PHASE RECORD — the locked end-of-phase statement ─────────────────────────
+// Generates the immutable block committed as phases/P0/P0_FINAL_RECORD.md
+// at the end of the phase (phase transition protocol).
+function openPhaseRecord(){
+  EXPORT_FILENAME='P0_FINAL_RECORD.md';
+  var ab=document.getElementById('applyrestorebtn');if(ab)ab.style.display='none';
+  var ta=document.getElementById('export-ta');if(ta)ta.readOnly=true;
+  var wkDone=WK.filter(function(_,wi){var c=wkC(wi);return c.t>0&&c.d===c.t;}).length;
+  var weighted=calcWeightedScore(exams);
+  var grade=weighted!==null?gradeFromScore(weighted):'—';
+  var gpa=weighted!==null?calcGPA(grade).toFixed(2):'—';
+  var lines=[];
+  lines.push('PHASE: P0 — Computing Foundations');
+  lines.push('DATES: May 3, 2026 – (completion date)');
+  lines.push('WEEKS COMPLETED: '+wkDone+'/'+WK.length);
+  lines.push('EXAMS:');
+  if(exams.length){
+    exams.forEach(function(e){
+      var t=(e.type||'daily');t=t.charAt(0).toUpperCase()+t.slice(1);
+      lines.push('  '+t.padEnd(8)+'| '+String(e.scope||'').slice(0,38).padEnd(40)+'| '+e.date+' | '+e.score+' | '+e.grade+(e.model?' | '+e.model:''));
+    });
+  } else {
+    lines.push('  (no exams recorded)');
+  }
+  lines.push('WEIGHTED SCORE: '+(weighted!==null?weighted+'%':'—'));
+  lines.push('PHASE GRADE: '+grade);
+  lines.push('PHASE GPA: '+gpa);
+  lines.push('');
+  lines.push('LOCKED: This record is immutable once committed to phases/P0/.');
+  if(ta)ta.value=lines.join('\n');
+  document.getElementById('expmodal').classList.add('on');
+  var msg=document.getElementById('copy-msg');
+  msg.style.color='#534AB7';
+  msg.textContent='Phase Record ready. At end of P0: 💾 Download → commit to phases/P0/P0_FINAL_RECORD.md (never edit after).';
+  msg.style.display='block';
+}
+
+// ─── BACKUP / RESTORE — closes the one-way-sync gap ───────────────────────────
+// Backup downloads ALL data (tasks, exams, week checks) as one JSON file.
+// Restore lets you paste that JSON back in on any device if storage is lost.
+function backupJSON(){
+  try{
+    var data={version:1,exported:new Date().toISOString(),prog:prog,exams:exams,chks:chks};
+    var blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;a.download='p0_backup_'+new Date().toISOString().slice(0,10)+'.json';
+    document.body.appendChild(a);a.click();
+    setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},100);
+    var msg=document.getElementById('copy-msg');
+    msg.style.color='#0f6e56';
+    msg.textContent='✓ Backup downloaded. Keep it in your repo (e.g. tools/backups/) — it can fully restore this tracker.';
+    msg.style.display='block';
+  }catch(e){
+    var m2=document.getElementById('copy-msg');
+    m2.style.color='#ba7517';m2.textContent='Backup failed: '+e.message;m2.style.display='block';
+  }
+}
+function openRestore(){
+  var ta=document.getElementById('export-ta');
+  ta.readOnly=false;ta.value='';
+  ta.placeholder='Paste the contents of your p0_backup_....json file here, then press ✓ Apply restore';
+  ta.focus();
+  document.getElementById('applyrestorebtn').style.display='inline-block';
+  var msg=document.getElementById('copy-msg');
+  msg.style.color='#854F0B';
+  msg.textContent='Restore mode: paste backup JSON above. Nothing changes until you press ✓ Apply restore.';
+  msg.style.display='block';
+}
+async function applyRestore(){
+  var ta=document.getElementById('export-ta');
+  var msg=document.getElementById('copy-msg');
+  try{
+    var data=JSON.parse(ta.value);
+    if(!data||typeof data!=='object')throw new Error('not a JSON object');
+    var hasAny=data.prog||data.exams||data.chks;
+    if(!hasAny)throw new Error('no prog/exams/chks fields found — is this really a backup file?');
+    if(data.prog&&typeof data.prog==='object'){prog=data.prog;await ws_set(KP,prog);}
+    if(Array.isArray(data.exams)){exams=data.exams;await ws_set(KE,exams);}
+    if(data.chks&&typeof data.chks==='object'){chks=data.chks;await ws_set(KC,chks);}
+    ta.readOnly=true;
+    document.getElementById('applyrestorebtn').style.display='none';
+    renderStats();renderNav();renderMain();
+    msg.style.color='#639922';
+    msg.textContent='✓ Restored: '+Object.keys(prog).length+' task marks, '+exams.length+' exams, '+Object.keys(chks).length+' week checks — saved to storage.';
+    msg.style.display='block';
+  }catch(e){
+    msg.style.color='#ba7517';
+    msg.textContent='Restore failed: '+e.message+' — nothing was changed.';
+    msg.style.display='block';
+  }
+}
+
 // ─── GITHUB AUTO-SYNC VIA CLOUDFLARE WORKER ──────────────────────────────────
 var WORKER_URL = 'https://elite-cs-swe-sync.ghadahalimansour.workers.dev';
+// Shared secret — the worker must check this header and reject requests
+// without it, otherwise anyone who finds the URL can overwrite PROGRESS.md.
+// Set the SAME value in the worker:  if(request.headers.get('x-sync-key')!==SECRET) return new Response('forbidden',{status:403});
+var SYNC_KEY = 'CHANGE_ME_to_a_long_random_string';
 
 function inClaudeChat(){
   // Detect if running inside Claude chat sandbox
@@ -1249,7 +1373,7 @@ async function githubSync(){
   if(inClaudeChat()) return;
   try{
     // 1. Get current SHA
-    var getRes = await fetch(WORKER_URL, {method:'GET'});
+    var getRes = await fetch(WORKER_URL, {method:'GET', headers:{'x-sync-key':SYNC_KEY}});
     if(!getRes.ok) return;
     var getData = await getRes.json();
     var sha = getData.sha||'';
@@ -1311,7 +1435,7 @@ async function githubSync(){
     // 3. Commit via Worker
     var putRes = await fetch(WORKER_URL, {
       method: 'PUT',
-      headers: {'Content-Type':'application/json'},
+      headers: {'Content-Type':'application/json','x-sync-key':SYNC_KEY},
       body: JSON.stringify(body)
     });
 
@@ -1340,23 +1464,16 @@ async function init(){
   var sp=await ws_get(KP); var se=await ws_get(KE); var sc=await ws_get(KC);
   prog  = (sp&&Object.keys(sp).length>0)?sp:SEED_PROG;
   chks  = sc||{};
-  // Always merge seed exams — ensure both study days are present
-  // This restores any exam that was incorrectly deleted by old dedup logic
-  var mergedExams = se||[];
-  SEED_EXAMS.forEach(function(seed){
-    var exists=mergedExams.some(function(e){
-      return e.scope===seed.scope&&e.type===seed.type;
-    });
-    if(!exists) mergedExams.push(seed);
-    else {
-      // Keep best score
-      var idx=mergedExams.findIndex(function(e){return e.scope===seed.scope&&e.type===seed.type;});
-      if(idx>=0&&seed.score>mergedExams[idx].score) mergedExams[idx]=seed;
-    }
-  });
-  exams = mergedExams;
+  // Seed exams ONLY if storage returned nothing at all (first run / new device
+  // with no sync). If a saved list exists — even shorter than the seeds —
+  // respect it: the user may have deleted records on purpose.
+  if(se&&Array.isArray(se)){
+    exams=se;
+  } else {
+    exams=SEED_EXAMS.slice();
+    await ws_set(KE,exams);
+  }
   if(!sp||Object.keys(sp).length===0) await ws_set(KP,prog);
-  await ws_set(KE,exams); // always write merged exams back to storage
   var ok=await ws_set('p0_v3_ping',Date.now());
   setSbar(ok?'ok':'warn', ok?'✓ Synced to your Claude account — works on all devices':'⚠ Open inside Claude.ai for cross-device sync');
   renderStats(); renderNav(); renderMain();
